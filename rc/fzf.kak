@@ -25,6 +25,12 @@ Currently supported implementations:
     sk: github.com/lotabout/skim' \
 str fzf_implementation 'fzf'
 
+declare-option -docstring 'do not wrap in a terminal
+Default value:
+    false
+' \
+bool fzf_no_term false
+
 declare-option -docstring 'allow showing preview window
 Default value:
     true
@@ -109,7 +115,9 @@ fzf-horizontal -params .. %{ evaluate-commands %{
 
 define-command -hidden -docstring "wrapper command to create new terminal" \
 fzf-window -params .. %{ evaluate-commands %sh{
-    if [ -n "$kak_client_env_TMUX" ]; then
+    if [ "$kak_opt_fzf_no_term" = "true" ]; then
+        printf "%s\n" "nop %sh{@}"
+    elif [ -n "$kak_client_env_TMUX" ]; then
         printf "%s\n" 'tmux-terminal-window kak -c %val{session} -e "%arg{@}"'
     else
         printf "%s\n" "$kak_opt_fzf_terminal_command"
@@ -202,12 +210,18 @@ fzf -params .. %{ evaluate-commands %sh{
         fi
         # compose entire fzf command with all args into single file which will be executed later
         printf "%s\n" "export FZF_DEFAULT_OPTS=\"$kak_opt_fzf_default_opts\""
-        printf "%s\n" "cd \"${PWD}\" && ${preview_position} ${items_cmd} ${fzf_impl} ${default_query} ${fzf_args} ${preview_cmd} ${filter} > ${result}"
+        if [ "${kak_opt_fzf_no_term}" = "true" ]; then
+            printf "%s\n" "cd \"${PWD}\" && ${items_cmd} ${fzf_impl} ${filter} > ${result}"
+        else
+            printf "%s\n" "cd \"${PWD}\" && ${preview_position} ${items_cmd} ${fzf_impl} ${default_query} ${fzf_args} ${preview_cmd} ${filter} > ${result}"
+        fi
         printf "%s\n" "rm ${fzfcmd}"
     ) >> ${fzfcmd}
     chmod 755 ${fzfcmd}
 
-    if [ -n "${kak_client_env_TMUX}" ]; then
+    if [ "${kak_opt_fzf_no_term}" = "true" ]; then
+        cmd="nop %sh{${fzfcmd}}"
+    elif [ -n "${kak_client_env_TMUX}" ]; then
         # set default height if not set already
         [ -z "${tmux_height}" ] && tmux_height=${kak_opt_fzf_tmux_height}
         # if height contains `%' then `-p' will be used
